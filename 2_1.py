@@ -193,8 +193,8 @@ def process_pregnancy_data_improved(input_file="附件.xlsx", output_file="结�
                 results.append(
                     {
                         "孕妇代码": pregnant_code,
-                        "原始BMI": bmi,
-                        "Y染色体浓度0.04对应的检测孕周": predicted_week,
+                        "BMI": bmi,
+                        "target_time": predicted_week,
                         "使用的插值方法": method_used,
                         "数据点数量": len(group),
                         "Y染色体浓度范围": f"[{min(y_concentration):.4f}, {max(y_concentration):.4f}]",
@@ -230,36 +230,6 @@ def process_pregnancy_data_improved(input_file="附件.xlsx", output_file="结�
     # 转换为DataFrame
     result_df = pd.DataFrame(results)
 
-    # 建立检测孕周与BMI的预测模型
-    print("\n建立检测孕周预测BMI的模型...")
-    model_data = df[["检测孕周", "孕妇BMI"]].dropna()
-
-    if len(model_data) > 10:
-        X = model_data[["检测孕周"]]
-        y = model_data["孕妇BMI"]
-
-        # 使用较低次数的多项式回归，避免过拟合
-        poly_model = Pipeline(
-            [("poly", PolynomialFeatures(degree=2)), ("linear", LinearRegression())]
-        )
-
-        poly_model.fit(X, y)
-        predicted_weeks = result_df["Y染色体浓度0.04对应的检测孕周"].values.reshape(
-            -1, 1
-        )
-        predicted_bmi = poly_model.predict(predicted_weeks)
-        result_df["预测BMI"] = predicted_bmi
-
-        score = poly_model.score(X, y)
-        print(f"BMI预测模型 R² 得分: {score:.4f}")
-    else:
-        mean_bmi = df["孕妇BMI"].mean()
-        result_df["预测BMI"] = mean_bmi
-        print(f"数据不足建模，使用平均BMI: {mean_bmi:.2f}")
-
-    # 添加统计信息
-    result_df["BMI差异"] = result_df["预测BMI"] - result_df["原始BMI"]
-
     # 数据质量评估
     print(f"\n数据质量评估:")
     print(f"平均Y染色体变化幅度: {result_df['Y染色体变化幅度'].mean():.4f}")
@@ -277,18 +247,15 @@ def process_pregnancy_data_improved(input_file="附件.xlsx", output_file="结�
         # 显示结果摘要
         print("\n结果摘要:")
         print(f"处理的孕妇数量: {len(result_df)}")
-        print(f"平均预测孕周: {result_df['Y染色体浓度0.04对应的检测孕周'].mean():.2f}")
-        print(f"平均原始BMI: {result_df['原始BMI'].mean():.2f}")
-        print(f"平均预测BMI: {result_df['预测BMI'].mean():.2f}")
-        print(f"平均BMI差异: {result_df['BMI差异'].mean():.2f}")
+        print(f"平均预测孕周: {result_df['target_time'].mean():.2f}")
+        print(f"平均BMI: {result_df['BMI'].mean():.2f}")
 
         print("\n前5个结果:")
         display_columns = [
             "孕妇代码",
-            "Y染色体浓度0.04对应的检测孕周",
+            "target_time",
             "使用的插值方法",
-            "原始BMI",
-            "预测BMI",
+            "BMI",
         ]
         print(result_df[display_columns].head().to_string(index=False))
 
@@ -301,4 +268,4 @@ def process_pregnancy_data_improved(input_file="附件.xlsx", output_file="结�
 # 主函数
 if __name__ == "__main__":
     # 使用改进的方法处理数据
-    result = process_pregnancy_data_improved("附件.xlsx", "改进处理结果.xlsx")
+    result = process_pregnancy_data_improved("附件.xlsx", "data.xlsx")
