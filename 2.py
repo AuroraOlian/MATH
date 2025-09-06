@@ -135,6 +135,7 @@ class NIFTOptimizationDebugger:
             for idx, row in self.data.iterrows():
                 patient_data = {
                     "BMI": row["BMI"],
+                    "time": row["target_time"],
                     "individual_factor": np.random.normal(0, 0.1),  # 模拟个体差异
                 }
 
@@ -591,42 +592,14 @@ class NIFTOptimizationDebugger:
         return comparison
 
 
-def generate_demo_data(n_samples: int = 1000) -> pd.DataFrame:
-    """生成演示数据"""
-    np.random.seed(42)
-
-    # 生成BMI数据（偏向高BMI，符合题目描述）
-    bmi_data = np.random.gamma(2, 15) + 18  # gamma分布，均值约28
-    bmi_data = np.clip(bmi_data, 18, 50)  # 限制范围
-
-    # 其他特征
-    ages = np.random.normal(30, 5, n_samples)
-    ages = np.clip(ages, 20, 45)
-
-    # 模拟Y染色体达标时间（与BMI相关）
-    target_times = 8 + 0.2 * bmi_data + np.random.normal(0, 1, n_samples)
-    target_times = np.clip(target_times, 9, 20)
-
-    data = pd.DataFrame(
-        {
-            "BMI": bmi_data,
-            "age": ages,
-            "target_time": target_times,
-            "individual_factor": np.random.normal(0, 0.5, n_samples),
-        }
-    )
-
-    return data
-
-
 def main():
     """主函数：完整的调试和分析流程"""
     print("=== NIPT BMI分组优化 - 差分进化算法调试 ===\n")
 
-    # 1. 生成演示数据
-    print("1. 生成演示数据...")
+    # 1. 读取数据
+    print("1. 读取数据...")
 
-    data = generate_demo_data(1000)
+    data = pd.read_excel("data.xlsx")
     print(f"数据规模: {len(data)} 个样本")
     print(f"BMI范围: {data['BMI'].min():.2f} - {data['BMI'].max():.2f}")
     print(f"BMI均值: {data['BMI'].mean():.2f}\n")
