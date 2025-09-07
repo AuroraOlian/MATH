@@ -100,22 +100,22 @@ def process_pregnancy_data_improved(input_file="附件.xlsx", output_file="结�
 
         try:
             # 方法1：PCHIP插值（保形插值，保证单调性）
-            if n_points >= 3:
-                # 检查数据是否大致单调
-                is_increasing = (
-                    np.sum(np.diff(y_concentration) > 0) >= len(y_concentration) - 2
-                )
-                is_decreasing = (
-                    np.sum(np.diff(y_concentration) < 0) >= len(y_concentration) - 2
-                )
+            # if n_points >= 3:
+            #     # 检查数据是否大致单调
+            #     is_increasing = (
+            #         np.sum(np.diff(y_concentration) > 0) >= len(y_concentration) - 2
+            #     )
+            #     is_decreasing = (
+            #         np.sum(np.diff(y_concentration) < 0) >= len(y_concentration) - 2
+            #     )
 
-                if is_increasing or is_decreasing:
-                    try:
-                        pchip = PchipInterpolator(y_concentration, weeks)
-                        predicted_week = pchip(target_y)
-                        return predicted_week, "PCHIP插值"
-                    except:
-                        pass
+            #     if is_increasing or is_decreasing:
+            #         try:
+            #             pchip = PchipInterpolator(y_concentration, weeks)
+            #             predicted_week = pchip(target_y)
+            #             return predicted_week, "PCHIP插值"
+            #         except:
+            #             pass
 
             # 方法2：线性插值（最稳定）
             if n_points >= 2:
@@ -162,7 +162,7 @@ def process_pregnancy_data_improved(input_file="附件.xlsx", output_file="结�
 
             weeks = group_sorted["检测孕周"].values
             y_concentration = group_sorted["Y染色体浓度"].values
-            bmi = group_sorted["孕妇BMI"].values[0]
+            bmi = group_sorted["孕妇BMI"].values.mean()
 
             # 检查数据质量
             if len(weeks) < 2:

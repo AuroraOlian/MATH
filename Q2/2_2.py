@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class NIFTOptimizationDebugger:
+class NIPTOptimizationDebugger:
     """NIPT BMI分组优化调试器"""
 
     def __init__(self, data: pd.DataFrame, debug_mode: bool = True):
@@ -45,18 +45,13 @@ class NIFTOptimizationDebugger:
         self.w_accuracy = 0.65
         self.w_timing = 0.35
 
-    def calculate_accuracy_risk(self, y_concentration: float) -> float:
+    def calculate_accuracy_risk(self, delta_time: float) -> float:
         """计算准确性风险"""
-        threshold = 4.0
+        # if delta_time <= 0:
+        #     return 0.05  # 基础风险
 
-        if y_concentration >= threshold:
-            # 达标情况：风险很低但不为零
-            return 0.1 * np.exp(-(y_concentration - threshold))
-        else:
-            # 未达标情况：使用Sigmoid函数
-            deficit = threshold - y_concentration
-            risk = 1 / (1 + np.exp(-2 * deficit))
-            return risk
+        return min(0.1 * np.exp(0.2 * delta_time) + 0.05, 1.0)
+        # return min(0.05 + 0.05 * (1 - np.exp(-0.2 * delta_time)), 1.0)
 
     def calculate_timing_risk(self, detection_time: float) -> float:
         """计算时间延迟风险"""
@@ -71,35 +66,15 @@ class NIFTOptimizationDebugger:
         else:
             return 0.9 + 0.1 * min((detection_time - 27) / 5, 1.0)
 
-    def predict_y_concentration(
-        self, bmi: float, detection_time: float, patient_data: Dict
-    ) -> float:
-        """预测Y染色体浓度（简化模型）"""
-        # 基础浓度随时间增长
-        base_concentration = max(0, detection_time - 8) * 0.8
-
-        # BMI效应：BMI越高，浓度增长越慢
-        bmi_effect = -0.1 * (bmi - 25)
-
-        # 个体差异（可以基于其他特征）
-        individual_factor = patient_data.get(
-            "individual_factor", np.random.normal(0, 0.5)
-        )
-
-        predicted = base_concentration + bmi_effect + individual_factor
-        return max(0, predicted)
-
     def comprehensive_risk_assessment(
         self, patient_data: Dict, detection_time: float
     ) -> float:
         """综合风险评估"""
-        # 预测Y染色体浓度
-        predicted_conc = self.predict_y_concentration(
-            patient_data["BMI"], detection_time, patient_data
-        )
 
         # 计算两类风险
-        accuracy_risk = self.calculate_accuracy_risk(predicted_conc)
+        accuracy_risk = self.calculate_accuracy_risk(
+            patient_data["time"] - detection_time
+        )
         timing_risk = self.calculate_timing_risk(detection_time)
 
         # 总风险
@@ -124,7 +99,7 @@ class NIFTOptimizationDebugger:
             time_points = params[6:11].tolist()
 
             # 检查边界约束
-            if not self._check_boundary_constraints(boundaries):
+            if not self._check_boundary_constraints(boundaries, time_points):
                 return 1e6  # 大的惩罚值
 
             total_risk = 0
@@ -183,7 +158,9 @@ class NIFTOptimizationDebugger:
             logger.error(f"目标函数计算错误: {e}")
             return 1e6
 
-    def _check_boundary_constraints(self, boundaries: List[float]) -> bool:
+    def _check_boundary_constraints(
+        self, boundaries: List[float], time_points: List[float]
+    ) -> bool:
         """检查边界约束"""
         # 检查递增性
         for i in range(len(boundaries) - 1):
@@ -195,6 +172,15 @@ class NIFTOptimizationDebugger:
         for i in range(len(boundaries) - 1):
             if boundaries[i + 1] - boundaries[i] < min_gap:
                 return False
+
+        # for i in range(len(time_points) - 1):
+        #     if time_points[i + 1] <= time_points[i]:
+        #         return False
+
+        # min_gap = 0.2
+        # for i in range(len(time_points) - 1):
+        #     if time_points[i + 1] - time_points[i] < min_gap:
+        #         return False
 
         return True
 
@@ -468,17 +454,21 @@ class NIFTOptimizationDebugger:
         axes[1, 0].set_title("各组样本分布")
 
         # 4. 风险函数可视化
-        time_range = np.linspace(10, 25, 100)
-        conc_range = np.linspace(0, 8, 100)
+        time_range = np.linspace(0, 40, 100)
+        delta_time_range = np.linspace(0, 40, 100)
 
         # 时间风险曲线
         timing_risks = [self.calculate_timing_risk(t) for t in time_range]
         axes[1, 1].plot(time_range, timing_risks, "r-", label="时间风险", linewidth=2)
 
         # 准确性风险曲线（以不同浓度为例）
-        accuracy_risks = [self.calculate_accuracy_risk(c) for c in conc_range]
+        accuracy_risks = [
+            self.calculate_accuracy_risk(20 - t) for t in time_range
+        ]
         ax2 = axes[1, 1].twinx()
-        ax2.plot(conc_range, accuracy_risks, "b-", label="准确性风险", linewidth=2)
+        ax2.plot(
+            delta_time_range, accuracy_risks, "b-", label="准确性风险", linewidth=2
+        )
 
         axes[1, 1].set_xlabel("检测时点（周）")
         axes[1, 1].set_ylabel("时间风险", color="r")
@@ -532,7 +522,9 @@ class NIFTOptimizationDebugger:
 
             # 检查约束
             if i < 6:  # 边界参数
-                if not self._check_boundary_constraints(perturbed_params[:6]):
+                if not self._check_boundary_constraints(
+                    perturbed_params[:6], perturbed_params[6:]
+                ):
                     risk_pos = 1e6
                 else:
                     risk_pos = self.objective_function(perturbed_params)
@@ -544,7 +536,9 @@ class NIFTOptimizationDebugger:
             perturbed_params[i] -= perturbation
 
             if i < 6:  # 边界参数
-                if not self._check_boundary_constraints(perturbed_params[:6]):
+                if not self._check_boundary_constraints(
+                    perturbed_params[:6], perturbed_params[6:]
+                ):
                     risk_neg = 1e6
                 else:
                     risk_neg = self.objective_function(perturbed_params)
@@ -606,7 +600,7 @@ def main():
 
     # 2. 初始化优化器
     print("2. 初始化优化器...")
-    optimizer = NIFTOptimizationDebugger(data, debug_mode=True)
+    optimizer = NIPTOptimizationDebugger(data, debug_mode=True)
 
     # 3. 运行差分进化优化
     print("3. 运行差分进化优化...")
@@ -695,7 +689,8 @@ if __name__ == "__main__":
 
     # 约束违反检查
     final_boundaries = analysis["boundaries"]
-    if optimizer._check_boundary_constraints(final_boundaries):
+    final_timepoints = analysis["time_points"]
+    if optimizer._check_boundary_constraints(final_boundaries, final_timepoints):
         print("最终解满足所有边界约束")
     else:
         print("警告: 最终解违反边界约束!")
